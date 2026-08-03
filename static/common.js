@@ -131,10 +131,38 @@ document.addEventListener("click", function(event) {
     if (!menu) return;
 
     if (event.target.closest("#logo")) {
-        menu.classList.toggle('hidden');
+        const onStartPage = ["/start/ctl", "/start", "/"].includes(window.location.pathname);
+        if (!onStartPage) menu.classList.toggle('hidden');
     }
 
     if (event.target.closest("details") || event.target.closest(".execute")) {
-        menu.classList.add('hidden');
+        const onStartPage = ["/start/ctl", "/start", "/"].includes(window.location.pathname);
+        if (!onStartPage) menu.classList.add('hidden');
     }
 });
+
+// Sound: client-side progress time interpolation
+(function () {
+    function _fmtMs(ms) {
+        const s = Math.floor(ms / 1000);
+        return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
+    setInterval(function () {
+        const el = document.getElementById('sound_progress_time');
+        if (!el) return;
+        const raw = el.dataset.interp;
+        if (!raw) return;
+        const parts = raw.split(',');
+        if (parts.length < 4) return;
+        const progressMs = parseInt(parts[0]);
+        const durationMs = parseInt(parts[1]);
+        const isPlaying  = parts[2] === '1';
+        const serverTs   = parseFloat(parts[3]);
+        if (!isPlaying) return;
+        const currentMs = progressMs + (Date.now() / 1000 - serverTs) * 1000;
+        const clamped   = durationMs > 0 ? Math.min(currentMs, durationMs) : currentMs;
+        el.textContent  = durationMs > 0
+            ? _fmtMs(clamped) + ' / ' + _fmtMs(durationMs)
+            : _fmtMs(clamped);
+    }, 1000);
+}());

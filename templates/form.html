@@ -19,7 +19,7 @@
         <form>
             <table>
                 {% for field in form.fields %}
-                    {% if field.type() in ["execute", "execute_params"] %}
+                    {% if field.type() in ["execute", "execute_params", "actions", "label", "labelline", "space"] %}
                         <tr>
                             <td colspan="2">
                                 <div>

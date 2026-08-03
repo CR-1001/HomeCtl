@@ -60,7 +60,7 @@ def _add_intro(forms):
     #date = datetime.now().strftime("%Y-%m-%d")
     #forms.append(m.form(None, None, [
     #    m.label(welcome, "welcome"), m.space(2)], True, False))
-    forms.append(m.form(None, None, [m.space(13)], True, False))
+    forms.append(m.form(None, None, [m.space(15)], True, False))
 
 def _add_help(forms):
     """ Add help."""
@@ -90,7 +90,7 @@ def _add_md(forms):
     """ Add single markdown."""
     try:
         files_md, _ = fa.list_files(['start/'], True)
-        files_md = [f for f in files_md if f.endswith('.md')]
+        files_md = [f for f in files_md if f.endswith('.md') or f.endswith('.live-md')]
         files_md = sorted(files_md)
         for f in files_md: _load_md(forms, f, False)
     except Exception as e:
@@ -100,8 +100,11 @@ def _add_md(forms):
 def _load_md(forms:list, file:str, open:bool):
     """ Load markdown."""
     try:
-        md = markdown.for_file('start', file)
-        name = file[:-3]
+        is_live = file.endswith('.live-md')
+        meta = fa.read_file_meta_data(['start', file])
+        is_editable = is_live and not meta.get('readonly', True)
+        md = markdown.for_file('start', file, live=is_editable)
+        name = file[:-(8 if is_live else 3)]
         name = re.sub(r'^\d+[_ ]+', '', name)
         name = name.replace('/', ' / ')
         if not isinstance(md, m.space):
@@ -114,7 +117,7 @@ def _load_md(forms:list, file:str, open:bool):
                     "small"),
                 md]
             forms.append(m.form(None, name, fields, open, True, 
-                                details=f"📝 start/{file}"))
+                                details=f"{'✏️' if is_live else '📝'} start/{file}"))
     except Exception as e: logging.error(f"Error processing '{file}': {e}")
 
 

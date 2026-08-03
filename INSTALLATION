@@ -130,6 +130,27 @@ You may want to verify the permission change.
   ls -lR /srv/homectlx/share/<protected directory>
 The share directory can be changed in config.json.
 
+## Set up Spotify
+To use the Sound module, create a Spotify application at
+  https://developer.spotify.com/dashboard
+
+In the app settings, add your redirect URI to the list of allowed redirect URIs:
+  https://<your-server-ip>/sound/callback
+
+Note the client ID and client secret, then set them in config.json:
+  "spotify": {
+      "client_id":    "<your-client-id>",
+      "client_secret": "<your-client-secret>",
+      "redirect_uri":  "https://<your-server-ip>/sound/callback"
+  }
+
+To authorize the application, open the Sound module in HOMEctlx and follow the login link.
+This performs the OAuth2 authorization code flow and stores the tokens in
+  share/sound/tokens.json (directory and file need to be writable)
+
+After the initial authorization, tokens are refreshed automatically.
+To re-authorize (e.g., after revoking access or changing scopes), delete the token file and follow the login link again.
+
 ## Setup authentication
 HOMEctlx requires user authentication to access the application.
 After completing the installation, you must create at least one user account.

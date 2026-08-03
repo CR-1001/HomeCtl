@@ -7,6 +7,7 @@ View-model for files.
 
 import base64
 from copy import deepcopy
+import os
 import re
 import services.meta as m
 import services.fileaccess as fa
@@ -283,7 +284,7 @@ def edit(file) -> list[m.form]:
     meta_info = m.label(
         f"last change: {meta['changed']} / bytes: {meta['size']}", "small")
 
-    if not meta["is_text"] and not meta["is_markdown"]:
+    if not meta["is_text"] and not meta["is_markdown"] and not meta.get("is_live"):
 
         fields = []
         if   meta["is_image"]:    fields.append(m.media(link, "image"))
@@ -303,6 +304,7 @@ def edit(file) -> list[m.form]:
                 file_hidden,
                 m.text_big("content", content),
                 meta_info,
+                m.execute("files/update_file_back", "overwrite and go back"),
                 m.execute("files/update_file", "overwrite"),
             ], True))
         
@@ -357,11 +359,24 @@ def edit(file) -> list[m.form]:
 def _file_content(link:str, meta:dict, fields:list, file:str):
     """ File content."""
     curr_dir = state.get('files.dir', '/')
+    curr_edit = state.get('files.edit', False) in [True, "True"]
     if not meta["is_text"]:
-        if   meta["is_image"]:    fields.append(m.media(link, "image"))
-        elif meta["is_video"]:    fields.append(m.media(link, "video"))
-        elif meta["is_pdf"]:      fields.append(m.media(link, "pdf"))
-        elif meta["is_markdown"]: fields.append(markdown.for_file(curr_dir, file))
+        if   meta["is_image"]:           fields.append(m.media(link, "image"))
+        elif meta["is_video"]:           fields.append(m.media(link, "video"))
+        elif meta["is_pdf"]:             fields.append(m.media(link, "pdf"))
+        elif meta["is_markdown"]:
+            if curr_edit and not meta.get("readonly", True):
+                fields.append(m.applink(
+                    f"/files/ctl?dir={curr_dir}&file={file}",
+                    "edit", "markdown", "small"))
+            fields.append(markdown.for_file(curr_dir, file))
+        elif meta["is_live"]:
+            is_editable = not meta.get("readonly", True)
+            if is_editable:
+                fields.append(m.applink(
+                    f"/files/ctl?dir={curr_dir}&file={file}",
+                    "edit", "markdown", "small"))
+            fields.append(markdown.for_file(curr_dir, file, live=is_editable))
     else:
         text = fa.read_file([curr_dir, file])
         fields.append(m.text_big_ro('', text))
@@ -424,11 +439,54 @@ def remove_entries(file:str, remove:list[str]):
     return ctl(curr_dir, file)
 
 
+def update_line(live_path:str, line_idx:str, content:str=''):
+    """ Update a single line in a live-md file."""
+    parts = [p for p in live_path.split('/') if p]
+    if len(parts) < 1:
+        return m.error("Invalid path.")
+    file = parts[-1]
+    dir_path = '/' + '/'.join(parts[:-1]) if len(parts) > 1 else '/'
+    fa.update_line([dir_path, file], int(line_idx), content)
+    file_meta = fa.read_file_meta_data([dir_path, file])
+    is_editable = not file_meta.get('readonly', True)
+    return markdown.for_file(dir_path, file, live=is_editable)
+
+
+def append_line(live_path:str, content:str=''):
+    """ Append a new line to a live-md file."""
+    parts = [p for p in live_path.split('/') if p]
+    if len(parts) < 1:
+        return m.error("Invalid path.")
+    file = parts[-1]
+    dir_path = '/' + '/'.join(parts[:-1]) if len(parts) > 1 else '/'
+    fa.append_line([dir_path, file], content)
+    file_meta = fa.read_file_meta_data([dir_path, file])
+    is_editable = not file_meta.get('readonly', True)
+    return markdown.for_file(dir_path, file, live=is_editable)
+
+
+def for_file_live(dir:str, file:str, meta:dict=None):
+    """ Returns the live markdown element for a live-md file, or None if not applicable."""
+    if meta is None:
+        meta = fa.read_file_meta_data([dir, file])
+    if not meta.get('is_live'):
+        return None
+    is_editable = not meta.get('readonly', True)
+    return markdown.for_file(dir, file, live=is_editable)
+
+
 def update_file(file:str, content:list):
     """ Edit file."""
     curr_dir = state.get('files.dir', '/')
     fa.update_file([curr_dir, file], content, True)
     return [*ctl(curr_dir, file), m.notification(f"File {file} saved.")]
+
+
+def update_file_back(file:str, content:list):
+    """ Edit file and return to previous page."""
+    curr_dir = state.get('files.dir', '/')
+    fa.update_file([curr_dir, file], content, True)
+    return [m.notification(f"File {file} saved."), m.back()]
 
 
 def create_file(file:str, content:str):
@@ -476,7 +534,55 @@ def move_directory(dir_new:str):
     return directory(dir_new)
 
 
-def upload_file(rename:str, upload):
+def check_upload_conflicts(file_names: list, rename: str = "") -> list:
+    """Returns original filenames whose resolved names already exist in the current directory.
+    For rename with multiple files, returns [] to preserve server-side index numbering."""
+    curr_dir = state.get('files.dir', '/')
+    count = len(file_names)
+    if rename.strip() and count > 1:
+        return []  # let server handle; client filtering would break rename-N numbering
+    result = []
+    for filename in file_names:
+        if rename.strip():
+            name = rename.strip()
+            if '.' not in name and '.' in filename:
+                name += '.' + filename.rsplit('.', 1)[-1]
+        else:
+            name = filename
+        if os.path.exists(fa.share_path([curr_dir, name])):
+            result.append(filename)
+    return result
+
+
+def upload_file_http(upload_list, rename: str = ""):
+    """ Saves uploaded werkzeug FileStorage objects (received via HTTP multipart).
+    Files that already exist in the target directory are skipped; a notification
+    is returned listing any skipped names."""
+    curr_dir = state.get('files.dir', '/')
+    count = len(upload_list)
+    skipped = []
+    for i, f in enumerate(upload_list):
+        if rename.strip():
+            name = rename.strip()
+            if count > 1:
+                name = f"{name}-{i + 1}"
+            if '.' not in name and '.' in f.filename:
+                name += '.' + f.filename.rsplit('.', 1)[-1]
+        else:
+            name = f.filename
+        if os.path.exists(fa.share_path([curr_dir, name])):
+            skipped.append(name)
+            continue
+        fa.create_file([curr_dir, name], f.read())
+    result = directory()
+    if skipped:
+        label = "file already exists" if len(skipped) == 1 else "files already exist"
+        names_str = ", ".join(skipped)
+        result = [*result, m.notification(f"{len(skipped)} {label}, not replaced:\n{names_str}")]
+    return result
+
+
+def upload_file(upload, rename:str=""):
     """ Saves an uploaded file."""
     curr_dir = state.get('files.dir', '/')
     names  = upload["names"]

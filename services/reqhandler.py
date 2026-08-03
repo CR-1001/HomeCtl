@@ -8,11 +8,12 @@ The request handler receives requests and passes parameters to the view-models. 
 from collections.abc import Iterable
 import inspect
 import logging
-from flask import Blueprint, render_template, send_from_directory
-from flask_socketio import emit
+from flask import Blueprint, render_template, send_from_directory, request, jsonify
+from flask_socketio import emit, join_room, leave_room
 import services.meta as m
 import services.fileaccess as fa
-from viewmodels import files, start, alarms, ambients, lights, telemetry, calendar
+import services.state as state
+from viewmodels import files, start, alarms, ambients, lights, telemetry, calendar, sound
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class reqhandler:
     """ Renders the view models."""
 
     modules = {}
-    for m in [start, files, alarms, ambients, lights, telemetry, calendar]:
+    for m in [start, files, alarms, ambients, lights, telemetry, calendar, sound]:
         modules[m.__name__.replace('viewmodels.', '')] = m
 
     @cmdex_pb.route("/<vm>/ctl")
@@ -69,6 +70,34 @@ class reqhandler:
         
         payload = reqhandler.exec(vm, func, args)
         emit('response', payload)
+
+        # Broadcast live-md line updates to all other users viewing the same file
+        if vm == 'files' and func in ('update_line', 'append_line') and isinstance(args, dict):
+            live_path = args.get('live_path', '')
+            if live_path:
+                # Broadcast the same content keys that were sent to the saving user.
+                # Skip _error and None-keyed entries.
+                broadcast = {k: v for k, v in payload.items()
+                             if k not in (None, '_error')}
+                if broadcast:
+                    socketio.emit(
+                        'response', broadcast,
+                        to=f"live:{live_path}", skip_sid=request.sid)
+
+        # Broadcast full-file saves (update_file / update_file_back) to live-md viewers
+        if vm == 'files' and func in ('update_file', 'update_file_back') and isinstance(args, dict):
+            file = args.get('file', '')
+            if file:
+                curr_dir = state.get('files.dir', '/')
+                live_path = fa.sanitize([curr_dir, file])
+                file_meta = fa.read_file_meta_data([curr_dir, file])
+                if file_meta.get('is_live'):
+                    md = files.for_file_live(curr_dir, file, file_meta)
+                    if md is not None:
+                        html = render_template('field.html', field=md)
+                        socketio.emit(
+                            'response', {md.key: html},
+                            to=f"live:{live_path}", skip_sid=request.sid)
     
 
     @staticmethod
@@ -88,15 +117,19 @@ class reqhandler:
             sig = inspect.signature(method)
             accepted_params = sig.parameters.keys()
             # Filter to only accepted params and exclude empty string values
-            # (empty strings from form inputs shouldn't override default values)
+            # (empty strings from form inputs shouldn't override default values;
+            # exception: update_line's 'content' param may legitimately be empty)
+            allow_empty = {'content'} if func in ('update_line', 'append_line') else set()
             filtered_args = {k: v for k, v in args.items() \
-                if k in accepted_params and v not in ['', None]}
+                if k in accepted_params and (v not in ['', None] or k in allow_empty)}
             elements = method(**filtered_args)
             if not isinstance(elements, Iterable): elements = [elements]
             
             payload = {}
             for e in elements:
-                if e.type() == "view":
+                if e.type() == "back":
+                    payload["_back"] = "1"
+                elif e.type() == "view":
                     html = render_template(f"view.html", view=e)
                 elif e.type() in ["form", "header"]:
                     html = render_template(f"form.html", form=e)
@@ -120,6 +153,41 @@ class reqhandler:
             
         return payload
     
+
+    @cmdex_pb.route("/files/upload/check", methods=["POST"])
+    def check_upload_conflicts():
+        """Pre-flight endpoint: returns original filenames whose resolved names already exist."""
+        data   = request.get_json(silent=True) or {}
+        names  = data.get('names', [])
+        rename = data.get('rename', '')
+        return jsonify({'skip_originals': files.check_upload_conflicts(names, rename)})
+
+    @cmdex_pb.route("/files/upload", methods=["POST"])
+    def upload_file_http():
+        """HTTP multipart upload endpoint — used by the XHR progress uploader."""
+        upload_list = request.files.getlist('upload')
+        rename = request.form.get('rename', '')
+        try:
+            elements = files.upload_file_http(upload_list, rename)
+            if not isinstance(elements, Iterable): elements = [elements]
+            payload = {}
+            for e in elements:
+                if e.type() == "back":
+                    payload["_back"] = "1"
+                elif e.type() == "view":
+                    html = render_template("view.html", view=e)
+                elif e.type() in ["form", "header"]:
+                    html = render_template("form.html", form=e)
+                else:
+                    html = render_template("field.html", field=e)
+                if e.type() != "back":
+                    payload[e.key] = html
+            if "_error" not in payload:
+                payload["_error"] = render_template("field.html", field=m.error())
+        except Exception as e:
+            log.error(f'File upload error: {e}')
+            payload = {'_error': render_template('field.html', field=m.error('Upload failed'))}
+        return jsonify(payload)
 
     @cmdex_pb.route("/files/share/<path:file>")
     def get_file(file:str):

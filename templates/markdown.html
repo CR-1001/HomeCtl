@@ -1,7 +1,11 @@
 {% macro render_field(v) %}
 
     {%- if v.type() == "title" -%}
+    {%- if v.line_idx is not none -%}
+    <span class="md-header md-header-{{v.order}} {{v.style}} live-md-line" data-line-idx="{{v.line_idx}}" data-raw="{{v.raw|e}}">{{v.text}}</span>
+    {%- else -%}
     <span class="md-header md-header-{{v.order}} {{v.style}}">{{v.text}}</span>
+    {%- endif -%}
 
     {%- elif v.type() == "link" -%}
     <a class="md-link {{v.style}}" href="{{v.link}}"
@@ -33,8 +37,15 @@
         {%- endfor -%}
 
     {%- else -%}
+    {%- if v.line_idx is not none -%}
+    {%- if v.raw is not none and (v.raw.startswith('[ ] ') or v.raw.startswith('[x] ')) -%}
+    <span class="info {{v.style}} live-md-line" data-line-idx="{{v.line_idx}}" data-raw="{{v.raw|e}}"><span class="live-md-checkbox">{{- v.text[0] -}}</span>{{- v.text[1:] -}}</span>
+    {%- else -%}
+    <span class="info {{v.style}} live-md-line" data-line-idx="{{v.line_idx}}" data-raw="{{v.raw|e}}">{{- v.text -}}</span>
+    {%- endif -%}
+    {%- else -%}
     <span class="info {{v.style}}">{{- v.text -}}</span>
-
+    {%- endif -%}
     {%- endif -%}
 {% endmacro %}
 
@@ -42,7 +53,9 @@
 <details>
     <summary>{{field.summary}}</summary>
 {% endif %}
-    <div class="md-back width-1{% if field.recess %} recess back-3{% endif %} {{field.style}}">
+    <div class="md-back width-1{% if field.recess %} recess back-3{% endif %} {{field.style}}"
+        {%- if field.live %} data-live-path="{{field.path}}"{% endif %}
+        {%- if field.haskey() %} id="{{field.key}}"{% endif %}>
 
         {%- if field.content|length == 1 -%}
         <div>
@@ -50,6 +63,14 @@
                 {{- render_field(c) -}}
             {%- endfor -%}
         </div>
+        {%- elif field.live -%}
+            {%- for m in field.content -%}
+            <div>
+                {%- for c in m.content -%}
+                    {{- render_field(c) -}}
+                {%- endfor -%}
+            </div>
+            {%- endfor -%}
         {%- else -%}
 
             {% for m in field.content %}
@@ -73,6 +94,9 @@
             </details>
             {% endfor %}
 
+        {%- endif -%}
+        {%- if field.live -%}
+        <span class="live-md-append" title="append line">+</span>
         {%- endif -%}
 
     </div>

@@ -18,6 +18,7 @@
     <script defer src="{{ url_for('static', filename='common.js') }}"></script>
     <script defer src="{{ url_for('static', filename='cmdex.js') }}"></script>
     <script defer src="{{ url_for('static', filename='animation.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='live.js') }}"></script>
 
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
 
@@ -39,6 +40,19 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <div id="_popup_overlay" class="popup-overlay hidden">
+        <div class="popup-box back-1">
+            <div id="_popup"></div>
+            <div class="popup-close">
+                <span class="action" id="_popup_close">[ close ]</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="_processing" class="processing-overlay hidden">
+        <span id="_processing_text" class="glow-b">Processing...</span>
     </div>
 </body>
 

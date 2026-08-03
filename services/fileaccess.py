@@ -122,6 +122,7 @@ def read_file_meta_data(path:list[str]):
         "is_video": False,
         "is_pdf":   False,
         "is_markdown": False,
+        "is_live": False,
         }
     file = share_path(path)
     with mutex:
@@ -144,8 +145,9 @@ def read_file_meta_data(path:list[str]):
                 ["mp4", "mov", "avi", "wmv", "mkv", "flv",
                 "webm","m4v", "mpeg", "mpg", "3gp", "3g2"]:
                 meta["is_video"] = True
-            elif extension == "md":  meta["is_markdown"] = True
-            elif extension == "pdf": meta["is_pdf"] = True
+            elif extension == "md":       meta["is_markdown"] = True
+            elif extension == "live-md": meta["is_live"] = True
+            elif extension == "pdf":      meta["is_pdf"] = True
     return meta
 
 
@@ -174,6 +176,22 @@ def update_file(path:list[str], content:str, overwrite:bool):
     mode = "w" if overwrite else "a"
     with mutex, open(share_path(path), mode) as f: f.write(content)
     log_action(f"File updated: {path}.")
+
+
+def update_line(path:list[str], line_idx:int, new_content:str):
+    """ Replaces a single line in a file by zero-based index."""
+    with mutex:
+        lines = read_file(path).split("\n")
+        lines[int(line_idx)] = new_content
+        update_file(path, "\n".join(lines), True)
+
+
+def append_line(path:list[str], new_content:str):
+    """ Appends a new line to a file."""
+    with mutex:
+        content = read_file(path)
+        sep = "" if content.endswith("\n") else "\n"
+        update_file(path, content + sep + new_content + "\n", True)
 
 
 def clean_file(path:list[str], remove:Lambda):

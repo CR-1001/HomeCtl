@@ -28,5 +28,13 @@
                 "manual": true
             }
         }
+    },
+    "spotify": {
+        "client_id":              "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "client_secret":          "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "redirect_uri":           "https://192.168.0.17/sound/callback",
+        "cache_interval_s":       5,
+        "cache_interval_slow_s":  30,
+        "cache_ttl_s":            300
     }
 }

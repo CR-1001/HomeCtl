@@ -21,6 +21,7 @@ import services.scheduler as sch
 import services.authservice as auth
 from services.reqhandler import cmdex_pb
 import services.reqhandler as reqhandler
+import services.soundctl as soundctl
 
 
 app = Flask(__name__)
@@ -34,6 +35,7 @@ socketio = SocketIO(
     async_mode='threading',
     ping_timeout=60,
     ping_interval=25,
+    max_http_buffer_size=1000 * 1024 * 1024,  # 1000 MB, supports large file uploads sent as base64
     logger=False,
     engineio_logger=False
 )
@@ -48,6 +50,7 @@ def create_app(app):
         app.config.update(config)
     
     fa.init(app.config["share_dir"])
+    soundctl.init(app.config.get("spotify", {}))
 
     log.info("System initializing.")
 
@@ -92,6 +95,31 @@ def create_app(app):
             log.warning("Unauthorized execute attempt via WebSocket")
             return
         reqhandler.reqhandler.handle_execute(data)
+
+    @socketio.on('join_live')
+    def handle_join_live(data = None):
+        """ Handle joining a live-md room."""
+        if not auth.is_authenticated(): return
+        reqhandler.reqhandler.handle_join_live(data)
+
+    @socketio.on('leave_live')
+    def handle_leave_live(data = None):
+        """ Handle leaving a live-md room."""
+        if not auth.is_authenticated(): return
+        reqhandler.reqhandler.handle_leave_live(data)
+
+    @app.route('/sound/login')
+    def sound_login():
+        """Redirect user to Spotify OAuth authorization page."""
+        return redirect(soundctl.login_url())
+
+    @app.route('/sound/callback')
+    def sound_callback():
+        """Handle Spotify OAuth callback, exchange code for tokens."""
+        code = request.args.get('code', '')
+        if code:
+            soundctl.exchange_code(code)
+        return redirect('/sound/ctl')
 
     @app.route('/')
     def index(): return redirect('start/ctl')

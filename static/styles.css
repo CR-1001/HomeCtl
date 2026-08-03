@@ -211,6 +211,10 @@ textarea {
     display: flex;
 }
 
+#_header form {
+    display: block;
+}
+
 .flex form div {
     margin-right: 1rem;
 }
@@ -306,7 +310,7 @@ textarea {
     color: rgb(230, 230, 230);
 }
 
-input,a,a:visited,.action,textarea {
+input,a,a:visited,.action,textarea,.action-wrapper {
     text-decoration: none;
     color: rgb(230, 230, 230);
     margin-bottom: 0.6rem;
@@ -398,6 +402,40 @@ select, button {
     padding: 0.8rem;
 }
 
+.live-md-checkbox {
+    cursor: pointer;
+}
+
+.live-md-line {
+    cursor: text;
+}
+
+.live-md-append {
+    cursor: pointer;
+    display: block;
+    opacity: 0.3;
+    font-size: 0.85em;
+    padding: 0.1rem 0;
+    user-select: none;
+}
+
+.live-md-append:hover {
+    opacity: 0.8;
+}
+
+.live-md-input {
+    background-color: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-bottom: 0.05rem solid rgba(150, 200, 200, 0.4);
+    outline: none;
+}
+
 .md-header {
     line-height: 1.8rem;
     margin-top: 0.2rem;
@@ -426,6 +464,10 @@ select, button {
 
 .small {
     font-size: 0.7em;
+}
+
+.large {
+    font-size: 1.3em;
 }
 
 .fill, .fill img, .fill video {
@@ -505,3 +547,78 @@ table.calendar-grid td {
     min-height: 5rem;
     vertical-align: top;
 }
+
+/* --- Background animation --- */
+.bg-star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: rgba(200, 255, 255, 0.85);
+    border-radius: 50%;
+    animation-name: star-twinkle;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+}
+
+@keyframes star-twinkle {
+    0%   { opacity: 0;    }
+    100% { opacity: 0.55; }
+}
+
+/* -------- Popup overlay -------- */
+.popup-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.75);
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.popup-overlay.hidden {
+    display: none;
+}
+
+/* -------- Processing overlay -------- */
+.processing-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.35);
+    z-index: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.processing-overlay.hidden {
+    display: none;
+}
+
+.popup-box {
+    position: relative;
+    padding: 2rem;
+    width: 90vw;
+    max-height: 85vh;
+    overflow-y: auto;
+    border: 1px solid rgba(210, 210, 210, 0.2);
+    box-shadow: 0.5rem 0.5rem 1.5rem 0.5rem rgba(0, 0, 0, 0.9);
+}
+
+.popup-close {
+    margin-top: 1.5rem;
+    text-align: right;
+}
+
+#_popup .section {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+#_popup table td {
+    max-width: 60ch;
+    overflow-wrap: break-word;
+}
+
+

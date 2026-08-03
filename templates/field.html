@@ -19,7 +19,7 @@
     </div>
 
     {% elif field.type() == "execute_params" %}
-    <fieldset>
+    <fieldset class="action-wrapper">
         {% if field.params != None %}
             {% for p in field.params %}
             <input
@@ -36,6 +36,45 @@
                 [&nbsp;{{field.text}}&nbsp;]
         </div>
     </fieldset>
+
+    {% elif field.type() == "actions" %}
+    <div style="display:flex; gap:0.25rem; align-items:center; flex-wrap:wrap;">
+        {% for item in field.items %}
+            {% if item.type() == "execute" %}
+            <span
+                data-func="{{item.func}}"
+                {% if item.confirm not in [None, ''] %}data-confirm="{{item.confirm}}"{% endif %}
+                class="action execute {% if item.important %}glow-a{% endif %} {{item.style}}">
+                [&nbsp;{{item.text}}&nbsp;]
+            </span>
+            {% elif item.type() == "execute_params" %}
+            <span class="fieldset action-wrapper">
+                {% if item.params %}{% for p in item.params %}
+                <input type="hidden" name="{{p}}" value="{{item.params[p]}}">
+                {% endfor %}{% endif %}
+                <span
+                    data-func="{{item.func}}"
+                    {% if item.confirm not in [None, ''] %}data-confirm="{{item.confirm}}"{% endif %}
+                    class="action execute {% if item.important %}glow-a{% endif %} {{item.style}}">
+                    [&nbsp;{{item.text}}&nbsp;]
+                </span>
+            </span>
+            {% elif item.type() == "label" %}
+            <span {% if item.key %}id="{{item.key}}"{% endif %} class="info {{item.style}}"{% if item.data %} data-interp="{{item.data}}"{% endif %}>{{item.text}}</span>
+            {% elif item.type() == "space" %}
+            <span style="display:inline-block; width:1rem;"></span>
+            {% elif item.type() == "select" %}
+            <select name="{{item.param}}"
+                {% if item.func %}data-func="{{item.func}}" onchange="process(this)"{% endif %}>
+                {% for v in item.values %}
+                <option value="{{v.value}}" {% if v == item.default %}selected{% endif %}>
+                    {% if v.text != None %}{{v.text}}{% else %}{{v.value}}{% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            {% endif %}
+        {% endfor %}
+    </div>
 
     {% elif field.type() == "autoupdate" %}
     <fieldset class="hidden">
@@ -100,7 +139,8 @@
     
     {% elif field.type() == "select" %}
     <select
-        name="{{field.param}}">
+        name="{{field.param}}"
+        {% if field.func %}data-func="{{field.func}}" onchange="process(this)"{% endif %}>
         {% for v in field.values %}
         <option 
             value="{{v.value}}"
@@ -379,6 +419,20 @@
         {% endfor %}
     </div>
 
+    {% elif field.type() == "collapsible" %}
+    <details class="section" {% if field.open %}open{% endif %}>
+        <summary>
+            <span class="title-2 glow-a">&nbsp;{{field.summary.title()}}</span>
+        </summary>
+        <div class="section-body">
+            {% for item in field.content %}
+                {% with field=item %}
+                    {% include 'field.html' %}
+                {% endwith %}
+            {% endfor %}
+        </div>
+    </details>
+
     {% elif field.type() == "markdown" %}
     {% include 'markdown.html' %}
 
@@ -416,6 +470,15 @@
 
     {% elif field.type() == "notification" %}
     <div data-alert="{{field.text}}" style="display:none;"></div>
+
+    {% elif field.type() == "embed" %}
+    <iframe
+        src="{{field.link}}"
+        width="100%"
+        height="{{field.height}}"
+        frameborder="0"
+        allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+        loading="lazy"></iframe>
 
     {% else %}
     {# elif field.type() == "text_ro" #}

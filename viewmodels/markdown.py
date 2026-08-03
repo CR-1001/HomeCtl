@@ -12,11 +12,28 @@ import services.fileaccess as fa
 
 from typing import Generator
 
-def for_str(content: str, recess: bool = True) -> m.markdown:
+def _replace_symbols(text: str) -> str:
+    """ Replace symbols. """
+    text = re.sub(r'\[ \]', '☐', text)
+    text = re.sub(r'\[x\]', '☑', text, flags=re.IGNORECASE)
+    text = re.sub(r'<->', '↔', text)
+    text = re.sub(r'->', '→', text)
+    text = re.sub(r'<-', '←', text)
+    text = re.sub(r'(?<!-)---(?!-)', '—', text)
+    text = re.sub(r'(?<!-)--(?!-)', '–', text)
+    text = re.sub(r'\.\.\.', '…', text)
+    return text
+
+def for_str(content: str, recess: bool = True, live: bool = False) -> m.markdown:
     """ Convert a markdown string to a uielement. """
 
     sectionsx = [s for s in re.split(r'(?m)(?=^# )', content.strip()) if s.strip()]
     sections = list()
+
+    # For live mode: track each line's index in the original file.
+    # Use the original (un-stripped) lines so cursor matching is exact.
+    all_lines = content.split("\n") if live else []
+    line_cursor = 0
 
     for s in sectionsx:
 
@@ -25,12 +42,25 @@ def for_str(content: str, recess: bool = True) -> m.markdown:
 
         for l in lines:
 
+            # Find this line's position in the original file
+            live_idx = None
+            if live and l.strip() != '':
+                while line_cursor < len(all_lines) and all_lines[line_cursor].strip() != l.strip():
+                    line_cursor += 1
+                if line_cursor < len(all_lines):
+                    live_idx = line_cursor
+                    line_cursor += 1
+
             if l.startswith("#"):
                 order = 0
                 for char in l:
                     if char == '#': order += 1
                     else: break
-                fields.append(m.title(l[order:].strip(), order))
+                t = m.title(l[order:].strip(), order)
+                if live_idx is not None:
+                    t.line_idx = live_idx
+                    t.raw = l
+                fields.append(t)
             else:
                 links = re.findall(r'\[(.*?)\]\((.*?)\)', l)
                 prev_idx = 0
@@ -39,7 +69,11 @@ def for_str(content: str, recess: bool = True) -> m.markdown:
                     index = l.find(replace, prev_idx)
                     if index != -1:
                         if prev_idx != index:
-                            fields.append(m.label(l[prev_idx:index]))
+                            lbl = m.label(_replace_symbols(l[prev_idx:index]))
+                            if live_idx is not None:
+                                lbl.line_idx = live_idx
+                                lbl.raw = l
+                            fields.append(lbl)
                         src = link[1].strip()
                         if src.startswith('embed:'):
                             fields.append(m.embed(src[6:], link[0].strip()))
@@ -48,7 +82,11 @@ def for_str(content: str, recess: bool = True) -> m.markdown:
                         prev_idx = index + len(replace)
                 
                 if prev_idx < len(l):
-                    fields.append(m.label(l[prev_idx:]))
+                    lbl = m.label(_replace_symbols(l[prev_idx:]))
+                    if live_idx is not None:
+                        lbl.line_idx = live_idx
+                        lbl.raw = l
+                    fields.append(lbl)
 
             fields.append(m.space(1))
         fields.append(m.space(1))
@@ -58,11 +96,16 @@ def for_str(content: str, recess: bool = True) -> m.markdown:
     return m.markdown(sections, recess)
 
 
-def for_file(dir:str, file:str, recess:bool=True) -> m.uielement:
+def for_file(dir:str, file:str, recess:bool=True, live:bool=False) -> m.uielement:
     """ Markdown fields from a file. """
     try:
         content = fa.read_file([dir, file])
-        return for_str(content, recess)
+        md = for_str(content, recess, live)
+        if live:
+            md.live = True
+            md.path = fa.sanitize([dir, file])
+            md.key = 'livemd_' + re.sub(r'[^a-zA-Z0-9-]', '_', md.path).strip('_')
+        return md
     
     except Exception as e:
         logging.warning(f"File '{file}' in '{dir}' cannot be interpreted: {e}")

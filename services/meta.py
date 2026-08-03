@@ -51,6 +51,7 @@ class execute(uielement):
     important:bool=False
     key:str=None
     confirm:str=None
+    style:str=''
 
 
 @dataclass
@@ -180,6 +181,7 @@ class select(uielement):
     values:list[choice]
     default:choice=None
     desc:str=None
+    func:str=None
 
 
 @dataclass
@@ -230,11 +232,25 @@ class embed(uielement):
     link:str
     text:str
     style:str=''
+    height:int=380
+
+
+@dataclass
+class actions(uielement):
+    items:list
 
 
 @dataclass
 class section(uielement):
     content:list
+    key:str=None
+
+
+@dataclass
+class collapsible(uielement):
+    summary:str
+    content:list
+    open:bool=False
 
 
 @dataclass
@@ -243,12 +259,16 @@ class markdown(uielement):
     recess:bool=True
     summary:str=None
     path:str=None
+    live:bool=False
+    key:str=None
 
 
 @dataclass
 class title(uielement):
     text:str
     order:int=1
+    line_idx:int=None
+    raw:str=None
 
 
 @dataclass
@@ -257,6 +277,9 @@ class label(uielement):
     style:str=''
     key:str=None
     details:str=''
+    line_idx:int=None
+    data:str=None
+    raw:str=None
 
 
 @dataclass
@@ -301,6 +324,12 @@ class placeholder(uielement):
 class error(uielement):
     text:str=None
     key:str="_error"
+
+
+@dataclass
+class back(uielement):
+    """ Sentinel that tells the client to navigate back."""
+    key:str="_back"
 
 
 @dataclass
